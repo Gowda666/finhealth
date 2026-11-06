@@ -1,4 +1,4 @@
-// Automatically point to local backend if running on localhost and no env var provided
+// Automatically point to local backend if running on localhost, else use the live Render backend
 const getApiBase = () => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
@@ -6,7 +6,8 @@ const getApiBase = () => {
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return 'http://127.0.0.1:8000';
   }
-  return '';
+  // Production default fallback pointing to your live Render backend
+  return 'https://finhealth-api-p8dk.onrender.com';
 };
 
 const API_BASE = getApiBase();
@@ -38,7 +39,6 @@ export function uploadStatementFile(file, onProgress) {
     };
 
     xhr.onload = () => {
-      // If server returned non-200 or HTML error page
       try {
         const json = JSON.parse(xhr.responseText);
         if (xhr.status >= 200 && xhr.status < 300) {
@@ -49,17 +49,17 @@ export function uploadStatementFile(file, onProgress) {
         }
       } catch (e) {
         if (xhr.status === 0) {
-          reject(new Error('Cannot reach backend server. Please verify FastAPI is running at http://127.0.0.1:8000'));
+          reject(new Error('Cannot reach backend server. Please verify the backend is online.'));
         } else if (xhr.status === 413) {
           reject(new Error('File is too large. Max allowed size is 15MB.'));
         } else {
-          reject(new Error(`Server returned HTTP ${xhr.status}: ${xhr.statusText || 'Backend connection failed'}`));
+          reject(new Error(`Server returned HTTP ${xhr.status}: ${xhr.statusText || 'Backend connection error'}`));
         }
       }
     };
 
     xhr.onerror = () => {
-      reject(new Error('Cannot reach the backend server at http://127.0.0.1:8000. Please ensure the backend is running.'));
+      reject(new Error(`Cannot reach the backend server at ${API_BASE}. Please verify it is running.`));
     };
 
     xhr.send(formData);
@@ -76,6 +76,6 @@ export async function fetchSampleStatement(currency = '₹') {
     }
     return await res.json();
   } catch (err) {
-    throw new Error(err.message || 'Failed to connect to backend server at http://127.0.0.1:8000');
+    throw new Error(err.message || `Failed to connect to backend server at ${API_BASE}`);
   }
 }
