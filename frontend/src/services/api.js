@@ -1,4 +1,15 @@
-const API_BASE = import.meta.env.VITE_API_URL || '';
+// Automatically point to local backend if running on localhost and no env var provided
+const getApiBase = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://127.0.0.1:8000';
+  }
+  return '';
+};
+
+const API_BASE = getApiBase();
 
 export async function checkBackendHealth() {
   try {
@@ -27,20 +38,28 @@ export function uploadStatementFile(file, onProgress) {
     };
 
     xhr.onload = () => {
+      // If server returned non-200 or HTML error page
       try {
         const json = JSON.parse(xhr.responseText);
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve(json);
         } else {
-          reject(new Error(json.detail || json.message || `Upload failed with HTTP ${xhr.status}`));
+          const errMsg = json.detail || json.message || `Upload failed with status ${xhr.status}`;
+          reject(new Error(errMsg));
         }
       } catch (e) {
-        reject(new Error(`Server response error: ${xhr.statusText || 'Unable to parse server response'}`));
+        if (xhr.status === 0) {
+          reject(new Error('Cannot reach backend server. Please verify FastAPI is running at http://127.0.0.1:8000'));
+        } else if (xhr.status === 413) {
+          reject(new Error('File is too large. Max allowed size is 15MB.'));
+        } else {
+          reject(new Error(`Server returned HTTP ${xhr.status}: ${xhr.statusText || 'Backend connection failed'}`));
+        }
       }
     };
 
     xhr.onerror = () => {
-      reject(new Error('Network error connecting to backend API. Please check if the server is running.'));
+      reject(new Error('Cannot reach the backend server at http://127.0.0.1:8000. Please ensure the backend is running.'));
     };
 
     xhr.send(formData);
@@ -48,11 +67,15 @@ export function uploadStatementFile(file, onProgress) {
 }
 
 export async function fetchSampleStatement(currency = '₹') {
-  const encCurr = encodeURIComponent(currency);
-  const res = await fetch(`${API_BASE}/api/sample?currency=${encCurr}`);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || err.message || `Failed to fetch sample statement: HTTP ${res.status}`);
+  try {
+    const encCurr = encodeURIComponent(currency);
+    const res = await fetch(`${API_BASE}/api/sample?currency=${encCurr}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.message || `Backend returned status ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    throw new Error(err.message || 'Failed to connect to backend server at http://127.0.0.1:8000');
   }
-  return await res.json();
 }
