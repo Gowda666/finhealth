@@ -59,7 +59,11 @@ export function uploadStatementFile(file, onProgress) {
     };
 
     xhr.onerror = () => {
-      reject(new Error(`Cannot reach the backend server at ${API_BASE}. Please verify it is running.`));
+      const isRender = API_BASE.includes('onrender.com');
+      const hint = isRender
+        ? ' Note: Render Free tier services spin down after 15 minutes of inactivity and take ~50-90 seconds to wake up. Please wait 1 minute and retry.'
+        : '';
+      reject(new Error(`Cannot reach the backend server at ${API_BASE}.${hint} Please verify it is running.`));
     };
 
     xhr.send(formData);
@@ -76,6 +80,10 @@ export async function fetchSampleStatement(currency = '₹') {
     }
     return await res.json();
   } catch (err) {
-    throw new Error(err.message || `Failed to connect to backend server at ${API_BASE}`);
+    const isRender = API_BASE.includes('onrender.com');
+    const hint = isRender
+      ? ' (Render Free tier services sleep when idle and take ~60s to wake up on first request)'
+      : '';
+    throw new Error(err.message || `Failed to connect to backend server at ${API_BASE}.${hint}`);
   }
 }
